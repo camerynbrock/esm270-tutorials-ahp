@@ -1,0 +1,233 @@
+---
+title: "ESM 270 Week 8: Analytic Hierarchy Process (AHP)"
+subtitle: "Eliciting and mapping preferences for conservation priorities" 
+author: "Cameryn Brock"
+date: "10/06/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r}
+library(here)
+library(janitor)
+library(sf)
+library(ggmap)
+library(tidyverse)
+library(ahp)
+library(yaml)
+library(data.tree)
+```
+
+# Introduction
+
+## AHP
+
+Analytic Hierarchy Process (AHP) is a common approach to eliciting expert or stakeholder input on the importance of difference conservation factors.
+
+## Data
+
+We will be using a case study (and the data they prepared) from a past group project on the Morro Bay National Estuary Program.
+
+# AHP
+
+```{r}
+c(
+"Version: 2.0",
+"Goal:",
+"  name: element",
+"  decision-makers:",
+    #optional node, needed only if not all decision-makers have equal voting power
+"    - User 1: 0.2",
+"    - User 2: 0.2",
+"    - User 3: 0.2",
+"    - User 4: 0.2",
+"    - User 5: 0.2",
+"  preferences:",
+    #fill in x's for user preferences
+"    User 1:",
+"      pairwise:",
+"      - [Threatened/Endangered, Charismatic, 9]",
+"      - [Threatened/Endangered, Migratory, 5]",
+"      - [Threatened/Endangered, Sig. Economic Value, 3]",
+"      - [Charismatic, Migratory, 1/5]",
+"      - [Charismatic, Sig. Economic Value, 1/3]",
+"      - [Migratory, Sig. Economic Value, 1]",
+"    User 2:",
+"      pairwise:",
+"      - [Threatened/Endangered, Charismatic, 6]",
+"      - [Threatened/Endangered, Migratory, 5]",
+"      - [Threatened/Endangered, Sig. Economic Value, 3]",
+"      - [Charismatic, Migratory, 5]",
+"      - [Charismatic, Sig. Economic Value, 1/7]",
+"      - [Migratory, Sig. Economic Value, 1/7]",
+"    User 3:",
+"      pairwise:",
+"      - [Threatened/Endangered, Charismatic, 1/8]",
+"      - [Threatened/Endangered, Migratory, 7]",
+"      - [Threatened/Endangered, Sig. Economic Value, 1/9]",
+"      - [Charismatic, Migratory, 7]",
+"      - [Charismatic, Sig. Economic Value, 1/5]",
+"      - [Migratory, Sig. Economic Value, 1/8]",
+"    User 4:",
+"      pairwise:",
+"      - [Threatened/Endangered, Charismatic, 9]",
+"      - [Threatened/Endangered, Migratory, 3]",
+"      - [Threatened/Endangered, Sig. Economic Value, 3]",
+"      - [Charismatic, Migratory, 1/7]",
+"      - [Charismatic, Sig. Economic Value, 1/5]",
+"      - [Migratory, Sig. Economic Value, 5]",
+"    User 5:",
+"      pairwise:",
+"      - [Threatened/Endangered, Charismatic, 7]",
+"      - [Threatened/Endangered, Migratory, 3]",
+"      - [Threatened/Endangered, Sig. Economic Value, 4]",
+"      - [Charismatic, Migratory, 1/7]",
+"      - [Charismatic, Sig. Economic Value, 1/4]",
+"      - [Migratory, Sig. Economic Value, 3]",
+"  children:",
+"    Threatened/Endangered:",
+"    Charismatic:",
+"    Sig. Economic Value:",
+"    Migratory:") %>% 
+  write_lines("ahp.txt")
+
+ahp <- Load("ahp.txt") 
+
+Calculate(ahp)
+
+ahp_weights <- print(ahp, priority = function(x) x$parent$priority["Total", x$name]) %>% 
+  rename(element = levelName) %>% 
+  drop_na() %>% 
+  mutate(element = str_sub(element, 5))
+```
+
+## Calculate weighted sums with AHP output
+
+Prepare a file with your target species and their status (1 or 0) for the focal elements: 
+
+* Threatened/Endangered
+* Charismatic
+* Migratory
+* Sig. Economic Value
+
+We are specifically interested in the cumulative weighted sums for each species, so we will combine your file with the weights calculated above.  
+
+```{r}
+spec_list <- read_csv("spec-list.csv") %>% 
+  clean_names()
+
+spec_list
+
+weights_long <- ahp_weights %>% 
+  pivot_wider(names_from = element,
+              values_from = priority) %>% 
+  clean_names()
+
+spec_weighted <- spec_list %>% 
+  mutate(threatened_endangered = threatened_endangered * weights_long$threatened_endangered,
+         charismatic = charismatic * weights_long$charismatic,
+         migratory = migratory * weights_long$migratory,
+         sig_economic_value = sig_economic_value * weights_long$sig_economic_value)
+
+# calculate weighted sums
+
+spec_sums <- spec_weighted %>% 
+  group_by(common_name, latin_name) %>% 
+  summarize(weighted_sum = sum(threatened_endangered, charismatic, 
+                               migratory, sig_economic_value))
+```
+
+# Visualize Results
+
+## Read in Morro Bay data
+
+```{r}
+# species and pu data
+# all csv files are unaltered from the xlsx files in the R drive. Just saved as csvs.
+
+spec <- read_csv("morro-bay-spec.csv") %>% 
+  head(140) %>% 
+  rename(latin_name = name)
+
+puvsp <- read_csv("morro-bay-puvspr.csv") %>% 
+  select(1:3) %>% 
+  head(11849)
+
+# polygons
+
+parcels <- read_sf(dsn = here("data"), layer = "MorroBay_parcels") %>% 
+  clean_names()
+```
+
+## Combine weight values with planning units and sum based on pu 
+
+```{r}
+spec_weight <- inner_join(spec_sums, spec, by = "latin_name") %>% 
+  rename(species = id) %>% 
+  select(species, common_name, latin_name, weighted_sum)
+
+puvsp_weight <- left_join(puvsp, spec_weight, by = "species") 
+
+pu_weight <- puvsp_weight %>% 
+  group_by(pu) %>% 
+  summarize(cum_sum = sum(weighted_sum,
+                          na.rm = TRUE)) %>% 
+  rename(id = pu)
+```
+
+## Bind cumulative sums to parcel shapes
+
+```{r}
+shp_weight <- inner_join(parcels, pu_weight, by = "id") %>% 
+  select(id, cum_sum) # geometry is sticky and still in df
+```
+
+## Plot!
+
+```{r}
+ggplot(data = shp_weight) + 
+  geom_sf(aes(fill = cum_sum),
+          color = "white",
+          size = 0.05) +
+  scale_fill_continuous(low = "slategray2",
+                        high = "navy") +
+  labs(fill = "Cumulative \nWeighted Sum") +
+  theme_minimal()
+```
+
+## Visualize with basemap from `ggmap`
+
+```{r}
+# get basemap with ggmaps
+
+morrobay <- get_map(location = c(lon = -120.7665, lat = 35.335),
+                    zoom = 12,
+                    maptype = "terrain-background", 
+                    source = "google")
+
+ggmap(morrobay) +
+  geom_sf(data = shp_weight,
+          aes(fill = cum_sum),
+          color = "white",
+          size = 0.1,
+          alpha = 0.85,
+          inherit.aes = FALSE) + 
+  coord_sf(crs = st_crs(4326)) + 
+  scale_fill_gradient(low = "slategray2",
+                      high = "navy") +
+  labs(fill = "Cumulative \nWeighted Sum",
+       x = NULL,
+       y = NULL) +
+  theme_minimal() 
+
+ggsave("week-8-ahp.png")
+```
+

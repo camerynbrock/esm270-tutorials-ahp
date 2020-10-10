@@ -1,0 +1,121 @@
+---
+title: "ahp original"
+author: "Cameryn Brock"
+date: "10/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(janitor)
+library(sf)
+library(ggmap)
+library(tidyverse)
+```
+
+
+
+## Read in Morro Bay data
+
+```{r}
+
+# species and pu data
+# all csv files are unaltered from the xlsx files in the R drive. Just saved as csvs.
+
+spec <- read_csv("morro-bay-spec.csv") %>% 
+  head(140) %>% 
+  rename(latin_name = name)
+
+puvsp <- read_csv("morro-bay-puvspr.csv") %>% 
+  select(1:3) %>% 
+  head(11849)
+
+# polygons
+
+parcels <- read_sf(dsn = here("data"), layer = "MorroBay_parcels") %>% 
+  clean_names()
+
+```
+
+## Read in AHP output
+ 
+```{r}
+ahp <- read_csv("spec-list-and-criteria.csv") %>% 
+  clean_names() %>% 
+  select(-weighted_sum_values_only)
+
+spec_weight <- inner_join(ahp, spec, by = "latin_name") %>% 
+  rename(species = id) %>% 
+  select(species, common_name, latin_name, weighted_sum)
+```
+
+
+## Combine weight values with planning units and sum based on pu 
+
+```{r}
+
+puvsp_weight <- left_join(puvsp, spec_weight, by = "species") 
+
+pu_weight <- puvsp_weight %>% 
+  group_by(pu) %>% 
+  summarize(cum_sum = sum(weighted_sum,
+                          na.rm = TRUE)) %>% 
+  rename(id = pu)
+
+```
+
+## Bind cumulative sums to parcel shapes
+
+```{r}
+
+shp_weight <- inner_join(parcels, pu_weight, by = "id") %>% 
+  select(id, cum_sum) # geometry is sticky and still in df
+
+```
+
+## Plot!
+
+```{r}
+
+ggplot(data = shp_weight) + 
+  geom_sf(aes(fill = cum_sum),
+          color = "white",
+          size = 0.05) +
+  scale_fill_continuous(low = "slategray2",
+                        high = "navy") +
+  labs(fill = "Cumulative \nWeighted Sum") +
+  theme_minimal()
+
+```
+
+## Visualize with basemap from `ggmap`
+
+```{r}
+
+# get basemap with ggmaps
+
+morrobay <- get_map(location = c(lon = -120.7665, lat = 35.335),
+                    zoom = 12,
+                    maptype = "terrain-background", 
+                    source = "google")
+
+ggmap(morrobay) +
+  geom_sf(data = shp_weight,
+          aes(fill = cum_sum),
+          color = "gray40",
+          size = 0.1,
+          alpha = 0.87,
+          inherit.aes = FALSE) + 
+  coord_sf(crs = st_crs(4326)) + 
+  scale_fill_gradientn(colors = c("white", "dodgerblue3", "midnightblue")) +
+  labs(fill = "Cumulative \nWeighted Sum",
+       x = NULL,
+       y = NULL) +
+  theme_minimal() 
+
+ggsave("week-8-ahp.png")
+
+```
+

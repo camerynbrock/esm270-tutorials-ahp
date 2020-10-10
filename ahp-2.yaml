@@ -1,0 +1,23 @@
+"Version: 2.0\nGoal:\n  name: Element\n  decision-makers:\n    #optional node, needed
+  only if not all decision-makers have equal voting power\n    - User 1: 0.2\n    -
+  User 2: 0.2\n    - User 3: 0.2\n    - User 4: 0.2\n    - User 5: 0.2\n  preferences:\n
+  \   User 1:\n      pairwise:\n      - [Threatened/Endangered, Charismatic, 9]\n
+  \     - [Threatened/Endangered, Migratory, 5]\n      - [Threatened/Endangered, Sig.
+  Economic Value, 3]\n      - [Charismatic, Migratory, 1/5]\n      - [Charismatic,
+  Sig. Economic Value, 1/3]\n      - [Migratory, Sig. Economic Value, 1]\n    User
+  2:\n      pairwise:\n      - [Threatened/Endangered, Charismatic, 6]\n      - [Threatened/Endangered,
+  Migratory, 5]\n      - [Threatened/Endangered, Sig. Economic Value, 3]\n      -
+  [Charismatic, Migratory, 5]\n      - [Charismatic, Sig. Economic Value, 1/7]\n      -
+  [Migratory, Sig. Economic Value, 1/7]\n    User 3:\n      pairwise:\n      - [Threatened/Endangered,
+  Charismatic, 1/8]\n      - [Threatened/Endangered, Migratory, 7]\n      - [Threatened/Endangered,
+  Sig. Economic Value, 1/9]\n      - [Charismatic, Migratory, 7]\n      - [Charismatic,
+  Sig. Economic Value, 1/5]\n      - [Migratory, Sig. Economic Value, 1/8]\n    User
+  4:\n      pairwise:\n      - [Threatened/Endangered, Charismatic, 9]\n      - [Threatened/Endangered,
+  Migratory, 3]\n      - [Threatened/Endangered, Sig. Economic Value, 3]\n      -
+  [Charismatic, Migratory, 1/7]\n      - [Charismatic, Sig. Economic Value, 1/5]\n
+  \     - [Migratory, Sig. Economic Value, 5]\n    User 5:\n      pairwise:\n      -
+  [Threatened/Endangered, Charismatic, 7]\n      - [Threatened/Endangered, Migratory,
+  3]\n      - [Threatened/Endangered, Sig. Economic Value, 4]\n      - [Charismatic,
+  Migratory, 1/7]\n      - [Charismatic, Sig. Economic Value, 1/4]\n      - [Migratory,
+  Sig. Economic Value, 3]\n  children:\n    Threatened/Endangered:\n    Charismatic:\n
+  \   Sig. Economic Value:\n    Migratory: \n"
